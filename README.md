@@ -3,7 +3,7 @@
 
 Trabalho final da primeira disciplina de programação
 
--Sistema de afinidade com politicos (Primeiro código acima de 200 linhas)
+-Sistema de afinidade com politicos
 
 Não revisado, a implementar arquivos...
 

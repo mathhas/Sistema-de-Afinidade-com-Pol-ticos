@@ -1,0 +1,565 @@
+#include <stdio.h>
+#include <io.h>
+#include <fcntl.h>
+#include <stdlib.h>
+
+//resolver bug na parte de nao haver mesmo politico com mesmo nome e partido (apertando 0)
+
+//A IMPLEMENTAR: ARQUIVOS
+
+/*
+IMPLEMENTAÇÕES EXTRA: 
+
+-SUPORTE PARA UTF-8 com BOM (OK)
+
+*/
+
+//FUNÇÕES AUXILIARES:
+
+struct politico //ok
+{
+    char nome[81];
+    char partido[81];
+    int matricula;
+};
+
+struct ementa //ok
+{
+    char nome[81];
+    char descricao[1001];
+    char votos[100][2];
+};
+
+void menu_principal() //ok
+{
+    //mostrar o menu de opções
+    wprintf(L"-------------------------------------Escolha uma das opcoes:---------------------------------------\n");
+    wprintf(L"1-Cadastrar político\n");
+    wprintf(L"2-Editar dados de político\n");
+    wprintf(L"3-Excluir político do sistema\n");
+    wprintf(L"4-Cadastrar proposta de emenda constitucional (PEC)\n");
+    wprintf(L"5-Registrar voto de político em emenda\n");
+    wprintf(L"6-Excluir proposta de emenda constitucional (PEC)\n");
+    wprintf(L"7-Exibir Meu Ranking por político\n");
+    wprintf(L"0-Sair\n");
+    wprintf(L"---------------------------------------------------------------------------------------------------\n");
+    //esse L no inicio provavelmente vem da especificação C large, c largo, que é o tipo de wprintf
+}
+
+int validaOpcao() //ok
+{
+    char opcao[100]; //variavel para armazenar a opção escolhida
+    menu_principal();
+
+    //le opção escolhida
+    scanf(" %[^\n]", &opcao);
+
+    while ((opcao[0] < 48) || (opcao[0] > 55))
+    { //mensagem de erro caso se digite uma opção que nao existe
+        wprintf(L"[ERRO]: opção NÃO existe!\nEscolha uma opção válida\n");
+        menu_principal();
+        scanf(" %[^\n]", &opcao);
+    }
+    return opcao[0];
+}
+
+int validar_nome_politico(char nome[81]) //ok
+{
+    int i = 0;
+    int resposta[81];
+
+    for (i = 0; nome[i] != '\0'; i++)
+    {
+        resposta[i] = nome[i];
+    }
+    resposta[i] = '\0';
+
+    i = 0;
+    while (resposta[i] != '\0')
+    {
+        if (resposta[i] < 65 && resposta[i] != 32 || resposta[i] > 90 && resposta[i] < 97 || resposta[i] > 122) // casos de descarte (return 0)
+        {
+            return 0;
+        }
+        i++;
+    }
+    return 1;
+}
+
+int tamString(char txt[81]) //ok
+{
+    int tam = 0;
+
+    while (txt[tam] != '\0')
+    {
+        tam++;
+    }
+    return tam;
+}
+
+int contabilizaPoliticos(struct politico politicos[100]) //ok
+{
+    int i = 0;
+
+    while (politicos[i].nome[0] != '\0')
+    {
+        i++;
+    }
+    return i;
+}
+
+int contabilizaEmentas(struct ementa ementas[100]) //ok
+{
+    int i = 0;
+
+    while (ementas[i].nome[0] != '\0')
+    {
+        i++;
+    }
+    return i;
+}
+
+int contabilizaVotos(struct ementa ementas[100], int n, int matricula) //ok
+{
+    int i = 0;
+    int j;
+
+    for (j = 0; j <= matricula; j++)
+    {
+        if (ementas[n].votos[j][0] != '\0')
+        {
+            i++;
+        }
+    }
+
+    if (ementas[n].votos[99][0] != '\0')
+    {
+        i++;
+    }
+    return i;
+}
+
+int contabilizaVotosPolitico(struct politico politicos[100], int matricula, struct ementa ementas[100]) //ok
+{
+    int i;
+    int nPec = contabilizaEmentas(ementas);
+    int votou = 0;
+
+    for (i = 0; i < nPec; i++)
+    {
+        if (ementas[i].votos[matricula][0] != '\0')
+        {
+            votou++;
+        }
+    }
+    return votou;
+}
+
+float calculaAfinidade(struct politico politicos[100], int matriculaDoPolitico, struct ementa ementas[100])
+{
+    //passagem de minusculo para maiusculo: minusculo - 32
+    float valEmenta;
+    int diferentes = 0; // relação dos votos entre usuario e politico
+    int nPec = contabilizaEmentas(ementas);
+    int nPolitico = contabilizaPoliticos(politicos);
+    int i;
+    float afinidade; //Afidinidade calculada
+
+    nPec = contabilizaEmentas(ementas);
+
+    valEmenta = (100 / nPec); //valor de cada ementa diante dos 100%
+
+    //passagem dos votos para maiusculo
+    for (i = 0; i < nPec; i++)
+    {
+        if (ementas[i].votos[matriculaDoPolitico][0] > 90) //votos dos politicos para maiusculo
+        {
+            ementas[i].votos[matriculaDoPolitico][0] -= 32;
+        }
+        if (ementas[i].votos[99][0] > 90) //votos do usuario para maisuculo
+        {
+            ementas[i].votos[99][0] -= 32;
+        }
+        if (ementas[i].votos[matriculaDoPolitico][0] != ementas[i].votos[99][0])
+        {
+            diferentes++;
+        }
+    }
+    afinidade = 100 - (diferentes * valEmenta);
+    return afinidade;
+}
+
+//FUNCIONALIDADES DO MENU:
+
+int cadastrar_politico(struct politico politicos[100], int matricula) //ok
+{
+    int i, j, k, l;
+    char resposta[81];
+    char resposta2[81];
+
+    wprintf(L"Qual o nome do político que gostaria de cadastrar? Digite '0' para voltar ao menu inicial.\n");
+    scanf(" %[^\n]", resposta);
+    if (resposta[0] == '0') //trata a opção 0
+    {
+        return 0;
+    }
+    else
+    {
+
+        while (validar_nome_politico(resposta) == 0)
+        {
+            wprintf(L"Nome inválido!\n");
+            wprintf(L"Qual o nome do político que gostaria de cadastrar? Digite '0' para voltar ao menu inicial.\n");
+            scanf(" %[^\n]", resposta);
+            //trata a opção 0
+            if (resposta[0] == '0')
+            {
+                return 0;
+            }
+        }
+        //atribui matricula ao politico
+        politicos[matricula].matricula = matricula;
+
+        // dá o nome já validado ao politico
+        for (i = 0; resposta[i] != '\0'; i++)
+        {
+            politicos[matricula].nome[i] = resposta[i];
+        }
+
+        //indaga partido
+        wprintf(L"Qual partido dele?\n");
+        scanf(" %[^\n]", resposta2);
+
+        //valida o partido (n ter o mesmo nome do politico)
+        if (tamString(resposta) == tamString(resposta2))
+        {
+            i = 0;
+            while (resposta[i] == resposta2[i])
+            {
+                i++;
+            }
+
+            while (i - 1 == tamString(resposta))
+            {
+                wprintf(L"Partido inválido!\n");
+                wprintf(L"Qual partido dele?\n");
+                scanf(" %[^\n]", resposta2);
+                if (tamString(resposta) == tamString(resposta2))
+                {
+                    i = 0;
+                    while (resposta[i] == resposta2[i])
+                    {
+                        i++;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        //validação para nao haver politicos de mesmo nome no mesmo partido
+        for (i = 0; i < matricula; i++) //testa nome
+        {
+            k = 0;
+            l = 0;
+            for (j = 0; j < tamString(resposta); j++)
+            {
+                if (politicos[i].nome[j] == resposta[j])
+                {
+                    k++;
+                }
+            }
+
+            if (k == tamString(resposta)) //testa partido
+            {
+                for (k = 0; k < tamString(resposta2); k++)
+                {
+                    if (politicos[i].partido[k] == resposta2[k])
+                    {
+                        l++;
+                    }
+                }
+
+                if (l == tamString(resposta2)) //se nome e partido igual, dá erro e pede dnv
+                {
+                    wprintf(L"Já existe %S do partido %S\n", resposta, resposta2);
+                    cadastrar_politico(politicos, matricula);
+                }
+            }
+        }
+
+        // dá o partido já validado ao politico
+        for (i = 0; resposta2[i] != '\0'; i++)
+        {
+            politicos[matricula].partido[i] = resposta2[i];
+        }
+    }
+    wprintf(L"Cadastro efetuado com sucesso!\n");
+    matricula++;
+    return matricula;
+}
+
+void editar_dados(struct politico politicos[100], int matricula) //ok
+{
+    int i;
+    char resp;
+    int nPolitico = contabilizaPoliticos(politicos);
+
+    wprintf(L"Existem %d políticos cadastrados!\n", nPolitico);
+
+    for (i = 0; i < matricula; i++)
+    {
+        wprintf(L"(%d/%d) você gostaria de editar '%S' dos partido '%S'?\nDigite 'S' para confirmar e 'N' para NÃO!", i + 1, nPolitico, politicos[i].nome, politicos[i].partido);
+        scanf(" %c", &resp);
+        if (resp == 'S' || resp == 's')
+        {
+            cadastrar_politico(politicos, i);
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+int excluir_politico(struct politico politicos[100], int matricula, struct ementa ementas[100]) // ok
+{
+    //A matrícula do politico é sua posição no vetor de votos nas ementas.
+    int i, j, k, l, m;
+    char resp;
+    int nPoliticos = contabilizaPoliticos(politicos);
+    int nEmentas = contabilizaEmentas(ementas);
+
+    printf("Existem %d politicos cadastrados!\n", nPoliticos);
+
+    // i representa a matricula do politico, sequencialmente no momento de escolha de quem excluir
+    for (i = 0; i < nPoliticos; i++)
+    {
+        m = 0;
+        wprintf(L"(%d/%d) você gostaria de excluir '%S' dos partido '%S'?\nDigite 'S' para confirmar e 'N' para NÃO!", i + 1, nPoliticos, politicos[i].nome, politicos[i].partido);
+        scanf(" %c", &resp);
+        if (resp == 'S' || resp == 's')
+        {
+            //limpado os votos dele
+            for (j = 0; j < nEmentas; j++)
+            {
+                for (k = 1; k <= contabilizaVotos(ementas, j, matricula); k++)
+                {
+                    ementas[j].votos[i + k - 1][0] = ementas[j].votos[i + k][0];
+                }
+                ementas[j + 1].votos[k + 1][0] = '\0';
+            }
+
+            //limpando o politico desejado do vetor de politicos
+            for (j = i; j < nPoliticos; j++)
+            {
+                politicos[j] = politicos[j + 1]; //retrocede uma unidade no vetor politicos
+                politicos[j].matricula = j;      //após decisão de escolha, rearranja as matriculas para os politicos remanescentes
+            }
+            politicos[j + 1].nome[0] = '\0'; //deleta o ultimo vetor politicos que tá vazio vazio
+            matricula--;                     //após uma exclusão retorna a matricula atual para proximos cadastros
+            wprintf(L"político excluido com sucesso!\n");
+            return matricula;
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+void cadastrar_ementa(struct ementa ementas[100]) //ok
+{
+    int i = contabilizaEmentas(ementas);
+
+    wprintf(L"Qual nome gostaria de cadastrar nesta PEC?\n");
+    scanf(" %[^\n]", ementas[i].nome);
+
+    wprintf(L"Digite uma breve descrição sobre o que essa PEC faz:\n");
+    scanf(" %[^\n]", ementas[i].descricao);
+
+    wprintf(L"Qual a sua posição sobre esse PEC? Digite 'S' para favoravel e 'N' para NÃO favorável.");
+    scanf(" %[^\n]", ementas[i].votos[99]); //cadastra o voto do usuario sempre na posição 99
+}
+
+void registrar_voto(struct politico politicos[100], int matricula, struct ementa ementas[100]) // ok
+{
+    //o voto S ou N é aceitavel pois ele é salvo no vetor votos na posição matricula, no caso i é a matricula do politico em questao
+    int i, j, k = 0;
+    char resp, resp2;
+    int nPec = contabilizaEmentas(ementas);
+    int nPolitico = contabilizaPoliticos(politicos);
+
+    wprintf(L"Existem %d políticos cadastrados.\n", nPolitico);
+
+    for (i = 0; i < nPolitico; i++)
+    {
+        wprintf(L"(%d/%d) você gostaria de registrar voto de '%S' dos partido '%S'?\nDigite 'S' para confirmar e 'N' para não!", i + 1, nPolitico, politicos[i].nome, politicos[i].partido);
+        scanf(" %c", &resp);
+        if (resp == 'S' || resp == 's')
+        {
+            wprintf(L"Existem %d PEC's cadastradas. Esse político votou em %d.\n", nPec, contabilizaVotosPolitico(politicos, i, ementas));
+            for (j = 0; j < nPec; j++)
+            {
+                wprintf(L"(%d/%d) %S - %S\n", j + 1, nPec, ementas[j].nome, ementas[j].descricao);
+                wprintf(L"Gostaria de registrar voto desse político na PEC?\nDigite 'S' para indicar que ele foi favorável, 'N' para não favorável, 'A' para indicar que ele optou por NÃO votar e '0' para não registrar o voto dele nesta pec.\n");
+                scanf(" %c", &resp2);
+
+                //salva cada resposta válida na matriz de caractere votos da ementa em questão
+                if (resp2 == 'S' || resp2 == 's')
+                {
+                    ementas[j].votos[i][0] = 'S';
+                }
+                else if (resp2 == 'N' || resp2 == 'n')
+                {
+                    ementas[j].votos[i][0] = 'N';
+                }
+                else if (resp2 == 'A' || resp2 == 'a')
+                {
+                    ementas[j].votos[i][0] = 'A';
+                }
+                else
+                {
+                    continue;
+                }
+            }
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+void excluir_ementa(struct ementa ementas[100], int matricula) //ok
+{
+    int i, j;
+    char resp;
+    int nPec = contabilizaEmentas(ementas);
+
+    wprintf(L"Existem %d PEC's cadastradas!\n", nPec);
+
+    for (i = 0; i < nPec; i++)
+    {
+        wprintf(L"(%d/%d) Você gostaria de excluir '%S' - '%S' ?\nDigite 'S' para confirmar e 'N' para não!", i + 1, nPec, ementas[i].nome, ementas[i].descricao);
+        wprintf(L"Existem %d votos nessa PEC.\n", contabilizaVotos(ementas, i, matricula));
+        scanf(" %c", &resp);
+
+        //julga resposta
+        if (resp == 'S' || resp == 's')
+        {
+            //se sim, exclui ementa
+            for (j = 0; j < nPec; j++)
+            {
+                ementas[i] = ementas[i + 1]; //retrocede em um o vetor ementas
+            }
+            wprintf(L"Pec excluida com sucesso!\n");
+        }
+        else //se não, continua perguntando sobre as próximas ementas
+        {
+            continue;
+        }
+    }
+}
+
+void exibir_ranking(struct politico politicos[100], int matricula, struct ementa ementas[100]) // ok
+{
+    int i;
+    char resp;
+    int nPolitico = contabilizaPoliticos(politicos);
+    int nPec = contabilizaEmentas(ementas);
+    float afinidade;
+
+    wprintf(L"Existem %d políticos, e %d emendas cadastradas.\n", nPolitico, nPec);
+
+    //loop para saber qual politico testar afinidade
+    for (i = 0; i < nPolitico; i++)
+    {
+        wprintf(L"(%d/%d) você gostaria de testar afinidade com '%S' dos partido '%S'?\nDigite 'S' para confirmar e 'N' para NÃO!", i + 1, nPolitico, politicos[i].nome, politicos[i].partido);
+        scanf(" %c", &resp);
+
+        //politico escolhido:
+        if (resp == 'S' || resp == 's')
+        {
+            afinidade = calculaAfinidade(politicos, i, ementas); //retorna o valor dá afinidade em percentual
+            wprintf(L"A sua afinidade com o político %S, do partido %S, é de: %.1f%%\n", politicos[i].nome, politicos[i].partido, afinidade);
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+int main(void)
+{
+    //função setmode define o modo de tradução do arquivo, 1º parametro: descreve o arquivo, 2º parametro: especifica o modo de converção
+    _setmode(_fileno(stdout), 0x00040000); // "0x00040000='_O_U8TEXT'", tive que colocar o código da constante pois o compilador nao estava reconhecendo"
+    //dessa forma, o compilador compreende que a mudança será feita de windows1235 (padrão windows), para UTF-U com BOM, que abrange todos caracteres latinos e asiaticos
+    //*obs:para essa função terá problemas ao trabalhar com arquivos; lembrar de usar fflush para corrigir*
+
+    struct politico politicos[100];
+    struct ementa ementas[100];
+    int opcao;
+    int matricula = 0;
+
+    opcao = validaOpcao(); //mostra o menu, recebe e trata a opção selecionada
+
+    while (opcao != 48) //enquanto a opção escolhida for diferente de 0, o programa funciona continuamente
+    {
+        switch (opcao)
+        {
+        case 49:                                                  //opção 1
+            matricula = cadastrar_politico(politicos, matricula); // ok
+            break;
+        case 50:                                //opção 2
+            editar_dados(politicos, matricula); // ok
+            break;
+        case 51:                                                         //opção 3
+            matricula = excluir_politico(politicos, matricula, ementas); // ok
+            break;
+        case 52:                       //opção 4
+            cadastrar_ementa(ementas); //ok
+            break;
+        case 53:                                           //opção 5
+            registrar_voto(politicos, matricula, ementas); // ok
+            break;
+        case 54:                                //opção 6
+            excluir_ementa(ementas, matricula); //ok
+            break;
+        case 55:                                           //opção 7
+            exibir_ranking(politicos, matricula, ementas); // ok
+            break;
+        }
+        opcao = validaOpcao(); //volta ao menu após realizar ação selecionada se essa for diferente de 0
+    }
+
+    wprintf(L"\n\nObrigado por utilizar os nossos serviços!\n\n");
+
+    //--------------------------------------fim--programa--------------------------------------
+
+    //teste politico----------------
+    int i;
+    for (i = 0; i < matricula; i++)
+    {
+        wprintf(L"político[%d]\n", i);
+        wprintf(L"nome: %S, partido: %S, matricula: %d\n", politicos[i].nome, politicos[i].partido, politicos[i].matricula);
+    }
+
+    wprintf(L"Existem %d políticos cadastrados!\n", contabilizaPoliticos(politicos));
+    wprintf(L"A última matrícula é: %d\n", matricula);
+    //teste ementas-----------------
+    for (i = 0; i < contabilizaEmentas(ementas); i++)
+    {
+        wprintf(L"%S\n", ementas[i].nome);
+        wprintf(L"%S\n", ementas[i].descricao);
+        wprintf(L"Meu voto: %S\n", ementas[i].votos[99]);
+        wprintf(L"quantidade de votos na emenda %d: %d\n", i + 1, contabilizaVotos((ementas), i, matricula));
+    }
+    wprintf(L"quantidade de emendas: %d\n", contabilizaEmentas(ementas));
+
+    system("pause");
+    return 0;
+}
